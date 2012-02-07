@@ -1,3 +1,3 @@
 #!/bin/bash
 
-dpkg-deb --build pkg/deb pkg
+dpkg-deb --build pkg/deb .
