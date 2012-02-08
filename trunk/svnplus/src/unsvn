@@ -12,9 +12,9 @@ fi
 
 SVN_FILES=".svn"
 
-find ${WORKDIR} -depth -name ${SVN_FILES}
+# List
+find "${WORKDIR}" -depth -name "${SVN_FILES}"
 
-CMD="find ${WORKDIR} -depth -name ${SVN_FILES} -exec rm -Rf {} ;"
-echo $CMD
-$CMD
+# Deletion
+find "${WORKDIR}" -depth -name "${SVN_FILES}" -exec rm -Rf {} ;
 
