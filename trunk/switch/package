@@ -1,0 +1,34 @@
+#!/bin/bash
+
+function _PackageName() {
+        grep -i "package:" "$1" | cut -c 10-
+}
+
+function _PackageVersion() {
+        grep -i "version:" "$1" | cut -c 10-
+}
+
+function _PackageArchitecture() {
+        grep -i "architecture:" "$1" | cut -c 15-
+}
+
+SRC_DIR="./src"
+PKG_DIR="./pkg/deb"
+DST_DIR="."
+TMP_DIR="/tmp"
+
+CONTROLE_FILE="$PKG_DIR/DEBIAN/control"
+
+WKG_DIR="$TMP_DIR/`_PackageName $CONTROLE_FILE`_`_PackageVersion $CONTROLE_FILE`_`_PackageArchitecture $CONTROLE_FILE`"
+
+rm -r -f "$WKG_DIR"
+mkdir -p "$WKG_DIR"
+
+cp -Rf "$PKG_DIR"/* "$WKG_DIR"
+
+mkdir -p "$WKG_DIR/usr/bin"
+cp "$SRC_DIR/switch" "$WKG_DIR/usr/bin"
+
+dpkg-deb --build "$WKG_DIR" "$DST_DIR"
+
+rm -r -f "$WKG_DIR"
