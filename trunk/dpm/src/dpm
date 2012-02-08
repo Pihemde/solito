@@ -1,0 +1,469 @@
+#!/bin/bash
+
+########################################################################################################################
+#
+#				Assistant de _DéPloieMent_ d'applications sur serveur J2EE
+#
+#	Cet assistant peut :
+#		Prépare le domaine (à partir d'un zip/tar/répertoire contenant le domaine)
+#		Nettoyer le domaine (retire les applications et les fichiers inutiles)
+#		Déployer vos applications dans le domaine (copie des EAR, WAR, ...)
+#		Lancer le serveur avec ou sans options
+#
+#	Les serveurs officiellement supportés sont :
+#		- Weblogic (versions testés : v10.x)
+#		- Tomcat (version testés : v6.x)
+#
+#	Version : 0.3.2
+#	Date : 01/07/2010
+#	Auteur : Pierre-Marie Dhaussy <pierre-marie.dhaussy@bull.net>
+#	Notes de version : 
+#		- 0.3.2 (18/11/2011) :
+#			Correction mineures (mise en forme, erreurs textuelles)
+#		- 0.3.1 (12/01/2011) :
+#			Correction de bugs dans la purge
+#		- 0.3 (19/10/2010) :
+#			Ajout du support des modes d'execution, pour l'instant seul DEV est supporté.
+#			Au passage la variable JVM java.security.egd a été affecté à /dev/random en mode DEV.
+#		- 0.2 (01/07/2010) :
+#			Ajout du support tant attendu des formats de template de domaine.
+#			En plus du format zip, le tar, et le répertoire sont désormais gérés.
+#			Correctif sur l'arrêt des serveurs TOMCAT.
+#			Les différents serveurs peuvent bénéficier de patchs événementiels.
+#			Une compatibilité avec la version 0.1 est assurée.
+#			Un nouveau mécanisme d'activation du déboggage fait son apparition.
+#		- 0.1 (05/05/2010) :
+#			L'outil WLS en version 0.3 devient DPM.
+#			Arrivée du système de profil.
+#			En plus de Weblogic, Tomcat est maintenant nativement supporté sans patch de conf.
+#			Quasiment toutes les variables ont été renommées : (DPM_, JAVA_, WEBLOGIC_, TOMCAT_, ...).
+#			Tous les messages sauf l'aide ont été traduit en anglais.
+#			Tous les commentaires sauf l'entête ont été traduit en anglais.
+#			Les anciens fichiers de configuration ne sont plus compatible.
+#
+########################################################################################################################
+
+##
+## CONSTANTS
+##
+DPM_CRASH_MESSAGE="DPM : The program while end to avoid data lose."
+DPM_DEFAULT_CONFIG_FILE="./config.dpm"
+DPM_DEFAULT_EXECUTION_MODE="DEV"
+DPM_DEFAULT_DOMAIN_DIR="./domain"
+DPM_DEFAULT_DOMAIN_TEMPLATE_TYPE="zip"
+DPM_DEFAULT_DOMAIN_TEMPLATE_PATH="./.domain.zip"
+DPM_DEFAULT_PROFIL="DUMMY"
+DPM_SUPPORTED_TEMPLATE_TYPES="zip,tar,dir"
+
+# JAVA CONSTANTS
+JAVA_JMX_ARGS="-Dcom.sun.management.jmxremote"
+JAVA_DEBUG_ARGS="-Xdebug -Xnoagent -Xrunjdwp:transport=dt_socket,address=8000,server=y"
+JAVA_DEBUG_NO_WAIT_ARGS="$JAVA_DEBUG_ARGS,suspend=n"
+JAVA_DEBUG_AND_WAIT_ARGS="$JAVA_DEBUG_ARGS,suspend=y"
+
+# DUMMY CONSTANTS (Constants for fake profil)
+DUMMY_DEPLOYEMENT_SUBDIR="deploy"
+DUMMY_START_SCRIPT="bin/start.sh"
+DUMMY_STOP_SCRIPT="bin/stop.sh"
+DUMMY_TOBEPURGED_DIRS="$DUMMY_DEPLOYEMENT_SUBDIR/*"
+
+# WEBLOGIC CONSTANTS
+WEBLOGIC_DEPLOYEMENT_SUBDIR="autodeploy"
+WEBLOGIC_START_SCRIPT="startWebLogic.sh"
+WEBLOGIC_STOP_SCRIPT=""
+WEBLOGIC_TOBEPURGED_DIRS="$WEBLOGIC_DEPLOYEMENT_SUBDIR/* config/deployments/_appsdir_* servers/*/cache/* servers/*/logs/* servers/*/tmp/* *.log"
+
+# TOMCAT CONSTANTS
+TOMCAT_DEPLOYEMENT_SUBDIR="webapps"
+TOMCAT_START_SCRIPT="bin/startup.sh"
+TOMCAT_STOP_SCRIPT="bin/shutdown.sh"
+TOMCAT_TOBEPURGED_DIRS="$TOMCAT_DEPLOYEMENT_SUBDIR/*"
+# TOMCAT_DEBUG="jpda"
+
+##
+## FUNCTIONS
+##
+
+# Stop DPM with crash message
+crash () {
+	MESSAGE=$DPM_CRASH_MESSAGE
+	if [ -n "$1"  ]; then
+		MESSAGE=$1
+	fi
+	echo $MESSAGE
+	exit 1
+}
+
+# Check execution of preceding command and crash with message in case of error
+checkCrash () {
+	if [ $1 != 0 ]; then
+		crash $2
+	fi
+}
+
+# Load configuration file
+configure () {
+	if [ -r $DPM_CONFIG_FILE ];then
+		echo "DPM : Loading configuration file : '$DPM_CONFIG_FILE'."
+		# TODO vérifier le déclaration des variables indispensables.
+	        source $DPM_CONFIG_FILE
+
+		# Compatibility patch : 0.1 => 0.2
+		if [ "$DPM_DOMAIN_ZIP_FILE" != "" ]; then
+			DPM_DOMAIN_TEMPLATE_TYPE="zip";
+			DPM_DOMAIN_TEMPLATE_PATH=$DPM_DOMAIN_ZIP_FILE;
+		fi
+		# End of Patch
+	else
+		#crash "DPM : Unable to find configuration file. Please, create a configuration file or set \$DPM_CONFIG_FILE if exists."
+		echo "DPM : Unable to find configuration file. Please, create a configuration file or set \$DPM_CONFIG_FILE if exists."
+		help
+	fi
+}
+
+# Load DUMMY profil (Fake profil)
+loadDummyProfil () {
+	DPM_DOMAIN_DEPLOY_DIR="$DPM_DOMAIN_DIR/$DUMMY_DEPLOYEMENT_SUBDIR"
+	DPM_SERVER_START_SCRIPT=$DUMMY_START_SCRIPT
+	DPM_SERVER_STOP_SCRIPT=$DUMMY_STOP_SCRIPT
+	DPM_TOBEPURGED_DIRS=$DUMMY_TOBEPURGED_DIRS
+	if [ $COMMAND_SET == 0 ]; then
+		STOP=0
+		PREPARE=0
+		CLEAN=0
+		DEPLOY=0
+		START=0
+	fi
+}
+
+# Load WEBLOGIC profil
+loadWeblogicProfil () {
+	DPM_DOMAIN_DEPLOY_DIR="$DPM_DOMAIN_DIR/$WEBLOGIC_DEPLOYEMENT_SUBDIR"
+	DPM_SERVER_START_SCRIPT=$WEBLOGIC_START_SCRIPT
+	DPM_SERVER_STOP_SCRIPT=$WEBLOGIC_STOP_SCRIPT
+	DPM_TOBEPURGED_DIRS="$WEBLOGIC_TOBEPURGED_DIRS"
+	if [ $COMMAND_SET == 0 ]; then
+		STOP=0
+		PREPARE=1
+		CLEAN=0
+		DEPLOY=1
+		START=1
+	fi
+
+	# Accelerate the starting on linux
+	if [ "$DPM_EXECUTION_MODE" == "DEV" ]; then
+		ARGUMENTS="$ARGUMENTS -Djava.security.egd=file:///dev/urandom"
+	fi
+}
+
+# Load TOMCAT profil
+loadTomcatProfil () {
+	DPM_DOMAIN_DEPLOY_DIR="$DPM_DOMAIN_DIR/$TOMCAT_DEPLOYEMENT_SUBDIR"
+	DPM_SERVER_START_SCRIPT=$TOMCAT_START_SCRIPT
+	DPM_SERVER_STOP_SCRIPT=$TOMCAT_STOP_SCRIPT
+	DPM_TOBEPURGED_DIRS=$TOMCAT_TOBEPURGED_DIRS
+	if [ $COMMAND_SET == 0 ]; then
+		STOP=1
+		PREPARE=1
+		CLEAN=0
+		DEPLOY=1
+		START=1
+	fi
+}
+
+# Load corresponding profil
+loadProfil () {
+	case $DPM_PROFIL in
+		dummy | DUMMY)
+			loadDummyProfil
+		;;
+		weblogic | WEBLOGIC)
+			loadWeblogicProfil
+		;;
+		tomcat | TOMCAT)
+			loadTomcatProfil
+		;;
+	esac
+}
+
+# Execute specific server patchs for starting
+executeStartingPatchs () {
+	case $DPM_PROFIL in
+		dummy | DUMMY)
+		;;
+		weblogic | WEBLOGIC)
+		;;
+		tomcat | TOMCAT)
+			echo "Execute TOMCAT patchs"
+			if [ $STOP == 1 ]; then
+				sleep 1
+			fi
+			export CATALINA_OPTS="$CATALINA_OPTS $ARGUMENTS"
+		;;
+        esac
+}
+
+# Prepare domain
+prepare () {
+	echo "DPM : Delete domain : '$DPM_DOMAIN_DIR'."
+	rm -Rf $DPM_DOMAIN_DIR
+
+	case "$DPM_DOMAIN_TEMPLATE_TYPE" in
+
+		zip)
+    		echo "DPM : Extract new domain from zip file : '$DPM_DOMAIN_TEMPLATE_PATH'."
+			unzip $DPM_DOMAIN_TEMPLATE_PATH
+			checkCrash $? "Unable to find domain zip file."
+		;;
+
+		tar)
+			echo "DPM : Extract new domain from tar file : '$DPM_DOMAIN_TEMPLATE_PATH'."
+			tar -xf $DPM_DOMAIN_TEMPLATE_PATH
+			checkCrash $? "Unable to find domain tar file."
+		;;
+
+		dir)
+			echo "DPM : Copy new domain from path : '$DPM_DOMAIN_TEMPLATE_PATH'."
+			cp -Rf $DPM_DOMAIN_TEMPLATE_PATH $DPM_DOMAIN_DIR
+			checkCrash $? "Unable to find domain path."
+		;;
+
+		*)
+			echo "DPM : Unsupported template type : '$DPM_DOMAIN_TEMPLATE_TYPE'."
+			crash
+		;;
+	esac
+}
+
+# Cleanup domain
+clean () {
+	echo "DPM : Cleanup domain '$DPM_DOMAIN_DIR'."
+	if [ -n "$DPM_TOBEPURGED_DIRS" ]; then
+		for element in `echo $DPM_TOBEPURGED_DIRS`; do
+			FILE="$DPM_DOMAIN_DIR/$element"
+			echo "DPM : Deletion of : '$FILE'."
+			rm -Rf $FILE
+			checkCrash $? "Unable to find file : '$FILE'."
+		done
+	fi
+}
+
+# Deploying applications
+deploy () {
+	echo "DPM : Deploying applications : '$*'."
+	for arg in $*; do
+		# TODO à vérifier (-z ?)
+		if [ -z "$arg" ]; then
+			ears=$arg
+		else
+			ears=`eval echo '$'$arg`
+		fi
+		checkCrash $? "A Problem occur during applications deployement."
+		copyAllApplications $ears
+	done
+}
+
+# Copy all applications to domain
+copyAllApplications () {
+	for ear in $*; do
+		copyApplication "$ear"
+	done
+}
+
+# Copy an applications to domain
+copyApplication () {
+    echo "DPM : Copy of '$@' to '$DPM_DOMAIN_DEPLOY_DIR'."
+	cp -Rf $@ "$DPM_DOMAIN_DEPLOY_DIR"
+	checkCrash $?
+}
+
+# Start server
+startServer () {
+	echo "DPM : Starting server with args : '$@'."
+	cd $DPM_DOMAIN_DIR
+	checkCrash $? "DPM : Domain was not correctly deployed."
+	./$DPM_SERVER_START_SCRIPT $@
+	# checkCrash $? "DPM : A problem occur during startup script execution."
+	cd - > /dev/null
+}
+
+stopServer () {
+	echo "DPM : Shutdown server with args : '$@'."
+	cd $DPM_DOMAIN_DIR
+	checkCrash $? "DPM : Domain was not correctly deployed."
+	./$DPM_SERVER_STOP_SCRIPT $@
+	checkCrash $? "DPM : A problem occur during shutdown script execution."
+	cd - > /dev/null
+}
+
+# Print help
+help () {
+    echo "usage: dpm [goals] [options] [applications]"
+    echo "Goals :"
+    echo "  prepare                                         Supprime l'ancien domaine (s'il existe), et en installe un nouveau."
+    echo "  clean                                           Nettoye le domaine existant."
+    echo "  deploy                                          Installe les applications dans le domaine."
+    echo "  start                                           Lance le serveur depuis le script de démarrage du domaine."
+    echo "  stop                                            Arrête le serveur depuis le script de d'arrêt du domaine."
+    echo "Options :"
+    echo "  debug, --debug                                  Ajoute les options de debuggage aux paramètre de lancement du serveur."
+    echo "  jmx, --jmx                                      Ajoute les options d'activation pour JMX."
+    echo "  --arguments, --args, -a <arguments>             Arguments pour la JVM, le serveur, les applications, ..."
+    echo "Applications :"
+    echo "  <application>                                   Les applications peuvent-être de n'importe quel type supportées par le serveur."
+    echo "Alias :"
+    echo "  <alias>                                         Les applications peuvent-être substituées pas un ou plusieurs alias, qui doivent-être déclarés dans le fichier de configuration ."
+}
+
+##
+## BEGIN OF SCRIPT
+##
+
+# External members
+DPM_CONFIG_FILE=$DPM_DEFAULT_CONFIG_FILE
+DPM_EXECUTION_MODE=$DPM_DEFAULT_EXECUTION_MODE
+DPM_DOMAIN_DIR=$DPM_DEFAULT_DOMAIN_DIR
+DPM_DOMAIN_TEMPLATE_TYPE=$DPM_DEFAULT_DOMAIN_TEMPLATE_TYPE;
+DPM_DOMAIN_TEMPLATE_PATH=$DPM_DEFAULT_DOMAIN_TEMPLATE_PATH;
+DPM_PROFIL=$DPM_DEFAULT_PROFIL
+
+
+# Internal members
+STOP=0
+PREPARE=0
+CLEAN=0
+DEPLOY=0
+START=0
+HELP=0
+
+APPLICATIONS=""
+ARGUMENTS=""
+
+COMMAND_SET=0
+
+# Lecture des paramètres de ligne de commande
+while (( "$#" )) ; do
+	case "$1" in
+		-c | --config | --configuration)
+			shift
+			DPM_CONFIG_FILE=$1
+		;;
+
+		help | --help)
+			HELP=1
+		;;
+
+		stop)
+			STOP=1
+			COMMAND_SET=1
+		;;
+
+        	prepare)
+			PREPARE=1
+			COMMAND_SET=1
+		;;
+
+	        clean)
+			CLEAN=1
+			COMMAND_SET=1
+        	;;
+
+		deploy)
+			DEPLOY=1
+			COMMAND_SET=1
+		;;
+
+	        run | start)
+			START=1
+			COMMAND_SET=1
+        	;;
+
+		dev | developpement | --dev | --developpement)
+			DPM_EXECUTION_MODE="DEV"
+		;;
+
+		prod | production | --prod | --production)
+			DPM_EXECUTION_MODE="PROD"
+		;;
+
+		debug | --debug)
+			ARGUMENTS="$ARGUMENTS $JAVA_DEBUG_NO_WAIT_ARGS"
+		;;
+
+		debugw | --debugw | --debug-and-wait)
+			ARGUMENTS="$ARGUMENTS $JAVA_DEBUG_AND_WAIT_ARGS"
+		;;
+
+		jmx | --jmx)
+			ARGUMENTS="$ARGUMENTS $JAVA_JMX_ARGS"
+		;;
+
+		-a | --args | --arguments)
+			shift
+			ARGUMENTS="$ARGUMENTS $1"
+		;;
+
+		*)
+			APPLICATIONS="$APPLICATIONS $1"
+	esac
+	shift
+done
+
+# Print help and quit
+if [ $HELP == 1 ]; then
+	help
+	exit 0
+fi
+
+#
+# LOAD CONF
+#
+
+# Load configuration
+configure
+
+# Load profil
+loadProfil
+
+#
+# GO
+#
+
+$DPM_INIT_CMD
+
+if [ $STOP == 1 ]; then
+	$DPM_PRE_STOP_CMD
+	stopServer
+	$DPM_POST_STOP_CMD
+fi
+
+if [ $PREPARE == 1 ]; then
+	$DPM_PRE_PREPARE_CMD
+	prepare
+	$DPM_POST_PREPARE_CMD
+fi
+
+if [ $CLEAN == 1 ]; then
+	$DPM_PRE_CLEAN_CMD
+	clean
+	$DPM_POST_CLEAN_CMD
+fi
+
+if [ $DEPLOY == 1 ]; then
+	$DPM_PRE_DEPLOY_CMD
+	deploy "$APPLICATIONS"
+	$DPM_POST_DEPLOY_CMD
+fi
+
+if [ $START == 1  ]; then
+	$DPM_PRE_START_CMD
+	executeStartingPatchs
+	startServer "$ARGUMENTS"
+	$DPM_POST_START_CMD
+fi
+
+$DPM_EXIT_CMD
+
+##
+## END OF SCRIPT
+##

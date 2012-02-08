@@ -1,0 +1,105 @@
+#!/bin/bash
+
+function fstatus()
+{
+	svn st;
+}
+
+function fdelete()
+{
+	if [ -d "$1" ]; then
+		echo "Suppression du dossier [$1]";
+		rm -Rf $1;
+	else
+		echo "Suppression du fichier [$1]";
+		rm -f $1
+	fi
+}
+
+function frevert()
+{
+	echo "Revert du fichier [$1]";
+	svn revert $1;
+}
+
+function fupdate()
+{
+	echo "Update du fichier [$1]";
+	svn update $1;
+}
+
+function fsrevert()
+{
+        FLAG=$1
+        FILE=$2
+        #echo "${FLAG} : ${FILE}";
+        case "$FLAG" in
+                A|C|D|I|M|R|X|~)
+                        #echo "frevert ${FILE};"
+                        frevert "${FILE}";
+                ;;
+                !)
+                        #echo "frevert ${FILE};"
+                        frevert "${FILE}";
+                        #echo "fupdate ${FILE};"
+                        fupdate "${FILE}";
+                ;;
+                ?)
+                        if [ "${DELETE_UNVERSIONNED}" -eq "1" ]; then
+                                #echo "fdelete ${FILE};"
+                                fdelete "${FILE}";
+                        fi
+                ;;
+                *)
+                        WORKING_DIRECTORY="$1"
+        esac
+}
+
+# MAIN PROGRAM
+DELETE_UNVERSIONNED=0
+WORKING_DIRECTORY="`pwd`"
+FILES_STATUS=""
+FOLDERS_STATUS=""
+
+while (( "$#" )) ; do
+	case "$1" in
+		# -r | --recursive)
+		#;;
+
+		-d | --delete-unversionned)
+			DELETE_UNVERSIONNED=1
+		;;
+
+		-w | --working-directory)
+			shift
+			WORKING_DIRECTORY="$1"
+		;;
+		*)
+			WORKING_DIRECTORY="$1"
+	esac
+	shift
+done
+
+OLD_IFS=$IFS     # sauvegarde du séparateur de champ
+IFS=$'\n'     # nouveau séparateur de champ, le caractère fin de ligne
+
+for STATUS in $(fstatus); do
+        FILE=${STATUS:8};
+	if [ -d "${FILE}" ]; then
+		FOLDERS_STATUS="${STATUS}${IFS}${FOLDERS_STATUS}"
+	else
+		FILES_STATUS="${STATUS}${IFS}${FILES_STATUS}"
+	fi
+done
+
+for STATUS in $(echo ${FILES_STATUS}); do
+	fsrevert "${STATUS:0:1}" "${STATUS:8}"
+done
+
+for STATUS in $(echo ${FOLDERS_STATUS}); do
+	fsrevert "${STATUS:0:1}" "${STATUS:8}"
+done
+
+IFS=$OLD_IFS     # rétablissement du séparateur de champ par défaut
+
+fstatus
