@@ -1,0 +1,8 @@
+Package: switch
+Version: 0.1
+Section: base
+Priority: optional
+Architecture: all
+Depends: bash
+Maintainer: Pierre-Marie Dhaussy <pierremarie.dhaussy@gmail.com>
+Description: Switch/Unswitch file or directory. Ex : /etc/apt/sources.list.d => /etc/apt/sources.list.d_switched (To disable extras repos).
