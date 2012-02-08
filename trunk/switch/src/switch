@@ -1,64 +1,115 @@
 #!/bin/bash
 
-SWITCH_SUFFIX="switched"
-SWITCH_GOAL=""
-SWITCH_SOURCES_LIST_D="/etc/apt/sources.list.d"
-SWITCH_TEST="./test"
+###################################################################
+#
+#			Switching filename tool
+#
+#	This tool can rapidly change name of file (with prefix
+#	and/or suffix) to activate/desactivate many unix tools.
+#	Switch command already know many common file to switch,
+#	and it propose to use alias to switch them.
+#	Ex : rename /etc/apt/sources.list.d to desactivate
+#	extras APT repos : switch apt
+#
+###################################################################
 
-function _unswitch() {
-	mv "$1_$SWITCH_SUFFIX" "$1"
-	if [ $? -eq 0 ]; then
-		echo "switched on"
-	fi
+# Consts
+SWITCH_DEFAULT_SUFFIX="_switched"
+SWITCH_DEFAULT_ACTION="0"
+
+# Target specifics vars
+SWITCH_TARGET_SOURCES_LIST_D="/etc/apt/sources.list.d"
+SWITCH_TARGET_TEST="./test"
+
+# Vars
+SWITCH_ACTION="$SWITCH_DEFAULT_ACTION"
+
+function _error() {
+	echo "$1" >&2
 }
 
-function _switch() {
-	mv "$1" "$1_$SWITCH_SUFFIX"
+function _exit() {
+	_error "$1"
+	exit $2
+}
+
+function _help() {
+	echo "Usage : switch [OPTIONS] TARGET"
+	echo ""
+	echo "OPTION :"
+	echo "  -n              unswitch"
+	echo "  -p <prefix>     set prefix"
+	echo "  -s <suffix>     set suffix"
+	echo "TARGET :"
+	echo "  apt, sources.list.d :   $SWITCH_SOURCES_LIST_D"
+}
+
+function _unswitch() {
+	mv "$1$2$3" "$2"
 	if [ $? -eq 0 ]; then
 		echo "switched off"
 	fi
 }
 
+function _switch() {
+	mv "$2" "$1$2$3"
+	if [ $? -eq 0 ]; then
+		echo "switched on"
+	fi
+}
+
+
 if [ $# -eq 0 ]; then
-        echo "Usage : switch <GOAL> <ACTION>"
-	echo "GOAL :"
-	echo "	apt, sources.list.d :	$SWITCH_SOURCES_LIST_D"
-	echo "ACTION :"
-	echo "	0, off, OFF, disable :	switch off"
-	echo "	1, on, ON, enable :	switch on"
+	_help
         exit 0;
-elif [ $# -lt 2 ]; then
-	echo "At least one argument missed"
-	exit 1;
 fi
 
-case "$1" in
+while (( "$#" )) ; do
+        case "$1" in
+		-s )
+			shift
+			SWITCH_SUFFIX="$1"
+		;;
+
+		-p )
+			shift
+			SWITCH_PREFIX="$1"
+		;;
+
+		-n )
+			SWITCH_ACTION=1
+		;;
+
+		* )
+			if [ -n "$SWITCH_TARGET" ]; then
+				_exit "Target [$SWITCH_TARGET] already set" 1
+			fi
+			SWITCH_TARGET="$1"
+		;;
+	esac
+	shift
+done
+
+case "$SWITCH_TARGET" in
 	apt | sources.list.d)
-		SWITCH_GOAL="$SWITCH_SOURCES_LIST_D"
+		SWITCH_PATH="$SWITCH_TARGET_SOURCES_LIST_D"
 	;;
 
 	test)
-		SWITCH_GOAL="$SWITCH_TEST"
+		SWITCH_PATH="$SWITCH_TARGET_TEST"
 	;;
 
 	*)
-		echo "Unknown goal"
-		exit 2;
+		_exit "Unknown target" 2
 	;;
 esac
 
-case "$2" in
-	1 | on | ON | en | enable)
-		_unswitch "$SWITCH_GOAL"
-	;;
+if [ -z "$SWITCH_PREFIX" -a -z "$SWITCH_SUFFIX" ]; then
+	SWITCH_PREFIX="$SWITCH_DEFAULT_PREFIX"
+fi
 
-	0 | off | OFF | dis | disable)
-		_switch "$SWITCH_GOAL"
-	;;
-
-	*)
-		echo "Unknown action"
-		exit 3;
-	;;
-esac
-
+if [ $SWITCH_ACTION -lt 1 ]; then
+        _switch "$SWITCH_PREFIX" "$SWITCH_PATH" "$SWITCH_SUFFIX"
+else
+        _unswitch "$SWITCH_PREFIX" "$SWITCH_PATH" "$SWITCH_SUFFIX"
+fi
