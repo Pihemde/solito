@@ -1,0 +1,417 @@
+#!/bin/bash
+
+########################################################################################################################
+#
+#				Assistant de développement du framework Pôle-Emploi : SLD
+#
+#	Version : 0.3
+#	Date : 13/01/2012
+#	Auteur : Pierre-Marie Dhaussy <pierre-marie.dhaussy@bull.net>
+#
+########################################################################################################################
+
+# Fichier de configuration général
+SLD_MAIN_CONF="/etc/sld.conf"
+
+# Fichier de configuration personnel
+SLD_USER_CONF="${HOME}/.sld"
+
+
+#
+# Fonction de chargement de la configuration
+#
+function _sldLoadConfiguration() {
+
+	if [ -f "${SLD_MAIN_CONF}" ]; then
+		source ${SLD_MAIN_CONF}
+		SLD_CONF="OK"
+	else
+		SLD_CONF="KO"
+	fi
+
+	if [ -f "${SLD_USER_CONF}" ]; then
+		source ${SLD_USER_CONF}
+	elif [ "${SLD_CONF}" = "KO" ]; then
+		cp /usr/share/doc/sld/example/sld.conf ${HOME}/.sld
+		echo "Aucun fichier de configuration n'a été trouvé"
+		echo "Un fichier de configuration d'exemple a été copié dans ${HOME}/.sld"
+		echo "Adaptez ce fichier à votre environnement avant de relancer sld"
+		exit 1
+	fi
+
+	if [ "${PERL}" = "" ]; then
+		echo "La variable PERL n'a pas été définie."
+		exit 1
+	fi
+	if [ "${JAVADOC}" = "" ]; then
+		echo "La variable JAVADOC n'a pas été définie."
+		exit 1
+	fi
+	if [ "${SLD_J1}" = "" ]; then
+		echo "La variable SLD_J1 n'a pas été définie."
+		exit 1
+	fi
+	if [ "${SLD_ANT_HOME}" = "" ]; then
+		echo "La variable SLD_ANT_HOME n'a pas été définie."
+		exit 1
+	fi
+	if [ "${WLS_HOME}" = "" ]; then
+		echo "La variable WLS_HOME n'a pas été définie."
+		exit 1
+	fi
+	if [ "${SLD_ROOT}" = "" ]; then
+		echo "La variable SLD_ROOT n'a pas été définie."
+		exit 1
+	fi
+	if [ "${SLD_CURRENT_VERSION}" = "" ]; then
+		echo "La variable SLD_CURRENT_VERSION n'a pas été définie."
+		exit 1
+	fi
+
+	# Par defaut on choisi l'environnement de développement de la dernière version
+	_sldEnv ${SLD_CURRENT_VERSION}
+}
+
+#
+# Méthode générique pour appeler un script ANT du projet SLD.
+# Répond aux 2 containtes principales des scripts ANT SLD :
+# - 1 : avoir un ANT dégeullassé avec des libs ...
+# - 2 : avoir des options qui pointent vers les sources du SLD
+#
+function _sldAnt() {
+	# On sauvegarde le ANT_HOME
+	ANT_HOME_BAK=${ANT_HOME}
+
+	# On positionne le ANT_HOME pour qu'il pointe vers celui spécifique PE
+	export ANT_HOME=${SLD_ANT_HOME}
+
+	# On se positionne dans le répertoire hebergeant le script ANT
+	cd $1
+
+	# On execute le script ANT avec la tache demandée (qui peut-etre vide) et en ajoutant les options SLD qui vont bien
+	${SLD_ANT_HOME}/bin/ant -f $2 ${SLD_OPTS} $3
+
+	# On se repositionne dans le répertoire d'origine si possible et silencieusement
+	cd - > /dev/null
+
+	# On remet le ANT_HOME propre
+	export ANT_HOME=${ANT_HOME_BAK}
+}
+
+#
+# BatchCommun
+# @fichier [...]/BatchCommun/raccourcis.xml
+#
+function _sldBc() {
+	DIRECTORY="${SLD_DB_HOME}/LDJava_Src/LDJ_Logique_B/BatchCommun"
+	FILE="raccourcis.xml"
+	TASK=$1
+	_sldAnt ${DIRECTORY} ${FILE} ${TASK}
+}
+
+#
+# Assemblage-Livraison-Publication/LivraisonAvecSand
+# @fichier [...]/Assemblage-Livraison-Publication/LivraisonAvecSand/build.livraison.xml
+#
+function _sldAlpLas() {
+	DIRECTORY="${SLD_DG_HOME}/LDJava_Src/LDJ_Scripts/Assemblage-Livraison-Publication/LivraisonAvecSand"
+	FILE="build.livraison.xml"
+	TASK=$1
+	_sldAnt ${DIRECTORY} ${FILE} ${TASK}
+}
+
+#
+# BatchLivraisonAvecSand
+# @fichier [...]/BatchLivraisonAvecSand/build.xml
+#
+function _sldBlas() {
+	DIRECTORY="${SLD_DB_HOME}/LDJava_Src/LDJ_Logique_B/BatchLivraisonAvecSand"
+	FILE="build.xml"
+	TASK=$1
+	_sldAnt ${DIRECTORY} ${FILE} ${TASK}
+}
+
+#
+# ScriptGenJava
+# @fichier [...]//LDJ_Scripts/ScriptsGenJava
+#
+function _sldSgj() {
+	DIRECTORY="${SLD_DG_HOME}/LDJava_Src/LDJ_Scripts/ScriptsGenJava"
+	FILE="build.xml"
+	TASK=$1
+	_sldAnt ${DIRECTORY} ${FILE} ${TASK}
+}
+
+#
+# Fabrique les composants J1 et J2
+#
+function _sldMakeJs() {
+	if [ $# -ne 1 ]; then
+		break
+	fi
+	DESTINATION_PATH=$1
+	J1_PATH="${DESTINATION_PATH}/j1"
+	J2_PATH="${DESTINATION_PATH}/j2"
+	J2_SUBPACKAGES="fr"
+	J2_OPTIONS="-J-Xmx512m"
+
+	# J1
+	echo "Starting make J1"
+	mkdir -p ${J1_PATH}
+	echo "${PERL} ${SLD_J1} ${SOURCE_PATH} ${J1_PATH}"
+	${PERL} ${SLD_J1} "${SLD_DG_HOME}/LDJava_Src" "${SLD_DB_HOME}/LDJava_Src" ${J1_PATH}
+	echo "J1 done"
+
+	# J2
+	echo "Starting make J2"
+	mkdir -p ${J2_PATH}
+	echo "${JAVADOC} -sourcepath ${J1_PATH} -d ${J2_PATH} -subpackages ${J2_SUBPACKAGES} ${J2_OPTIONS}"
+	${JAVADOC} -sourcepath ${J1_PATH} -d ${J2_PATH} -subpackages ${J2_SUBPACKAGES} ${J2_OPTIONS}
+	echo "J2 done"
+
+	echo "All done"
+}
+
+#
+# Supprime le répertoire pubs
+#
+function _sldClean() {
+	rm -Rf ${SLD_PUBS}
+}
+
+#
+# Lance le WLS
+#
+function _sldWls() {
+	cd ${SLD_WLS_HOME}
+	./run.sh
+	if [ $? != 0 ]; then
+		./startWeblogic.sh
+	fi
+	cd -
+}
+
+#
+# Met à jour la copie de travail
+#
+function _sldUp() {
+	OLD_PWD=`pwd`
+
+	case "$SLD_SELECTED_VERSION" in
+		4)
+			echo "Updating DB/IB..."
+			cd ${SLD_DB_HOME}
+			svn up
+
+			echo "Updating DG/IG..."
+			cd ${SLD_DG_HOME}
+			svn up
+		;;
+
+		5)
+			echo "Updating..."
+			cd ${SLD_HOME}
+			svn up
+		;;
+	esac
+
+	cd ${OLD_PWD}
+	echo "All done"
+}
+
+#
+# Permet de se déplacer facilement dans les répertoires du projet
+#
+function _sldCd() {
+	case "$1" in
+		src | source | sources | home)
+			cd ${SLD_HOME}
+		;;
+
+		db | DB | batch | Batch)
+			cd ${SLD_DB_HOME}
+		;;
+
+		dg | DG | tp | Tp | TP)
+			cd ${SLD_DG_HOME}
+		;;
+
+		pubs|composants)
+			cd ${SLD_PUBS}
+		;;
+
+		html|junit|report)
+			cd ${SLD_HTML}
+		;;
+
+		wls|weblogic)
+			cd ${SLD_WLS_HOME}
+		;;
+
+		*)
+			echo "Ce mot clé ne correspond à aucun répertoire."
+			echo "Mots clé connu : src, source, sources, home ; db, DB, batch, Batch ; dg, DG, tp, Tp, TP ; pubs, composants ; html, junit, report ; wls, weblogic"
+		break
+	esac
+}
+
+function _sldEnv() {
+	SLD_BRANCH=""
+	case "$1" in
+		4 | 4.x) # VERSION ACTUELLE !
+			export SLD_SELECTED_VERSION=4
+			export SLD_HOME="${SLD_ROOT}/4.11"
+			export SLD_DB_HOME="${SLD_HOME}/DB/branches/delivery/ALDJ_V411_DB"
+			export SLD_DG_HOME="${SLD_HOME}/DG/branches/delivery/ALDJ_V411_DG"
+		;;
+
+		4122 | 4.12.2)
+			export SLD_SELECTED_VERSION=4
+			export SLD_HOME="${SLD_ROOT}/4.12.2"
+			export SLD_DB_HOME="${SLD_HOME}/ALDJ_V411_DB"
+			export SLD_DG_HOME="${SLD_HOME}/ALDJ_V411_DG"
+		;;
+
+		4123 | 4.12.3)
+			export SLD_SELECTED_VERSION=4
+			export SLD_HOME="${SLD_ROOT}/4.11"
+			export SLD_DB_HOME="${SLD_HOME}/DB/branches/4.12.3/ALDJ_V4123_IB"
+			export SLD_DG_HOME="${SLD_HOME}/DG/branches/4.12.3/ALDJ_V4123_IG"
+		;;
+
+		4qo | 4q-oracle | 4-qualifcation-oracle)
+			export SLD_SELECTED_VERSION=4
+			export SLD_HOME="${SLD_ROOT}/4.11_qualification_oracle"
+			export SLD_DB_HOME="${SLD_HOME}/DB/branches/delivery/ALDJ_V411_DB"
+			export SLD_DG_HOME="${SLD_HOME}/DG/branches/delivery/ALDJ_V411_DG"
+		;;
+
+		4qd | 4q-db2 | 4-qualification-db2)
+			export SLD_SELECTED_VERSION=4
+			export SLD_HOME="${SLD_ROOT}/4.11_qualification_db2"
+			export SLD_DB_HOME="${SLD_HOME}/DB/branches/delivery/ALDJ_V411_DB"
+			export SLD_DG_HOME="${SLD_HOME}/DG/branches/delivery/ALDJ_V411_DG"
+		;;
+
+		5)
+			export SLD_SELECTED_VERSION=5
+			export SLD_HOME="${SLD_ROOT}/5"
+			export JAVA_HOME="/opt/jdk1.5.0_06"
+			export PATH="$JAVA_HOME/bin:$PATH"
+		;;
+
+		*)
+			echo "Environnement inconnu !"
+			echo "Attention les variables ne seront pas correctement valorisées."
+			exit 1
+	esac
+
+	#export ANT_HOME=${SLD_ANT_HOME}
+	export SLD_DB_OPTS="-Dsldj.db.home=${SLD_DB_HOME}"
+	export SLD_DG_OPTS="-Dsldj.dg.home=${SLD_DG_HOME}"
+	export SLD_OPTS="${SLD_DB_OPTS} ${SLD_DG_OPTS}"
+	export SLD_PUBS="${SLD_DG_HOME}/LDJava_Src/LDJ_Scripts/Assemblage-Livraison-Publication.out/pubs"
+	export SLD_HTML="${SLD_DB_HOME}/LDJava_Src/LDJ_Connecteurs_B/QualifBatchUtilisateurJUnitTest.out"
+
+	export SLD_WLS_HOME="${WLS_HOME}/batch4-wls10.3/"
+}
+
+function _sldHelp() {
+	echo "SLD : ici, bientôt, une aide, peut-être même contextuelle"
+}
+
+#
+# Begin Script
+#
+
+_sldLoadConfiguration
+
+#
+# Parcours et exécution des GOALS
+#
+while (( "$#" )) ; do
+	case "$1" in
+		1-compilation-tiga)
+			_sldBlas "1-Compilation-Tiga"
+		;;
+
+		2-fabrication-composants)
+			_sldBlas "2-Fabrication-Composants"
+		;;
+
+		2-fabrication-off-clearcase)
+			_sldAlpLas "2-fabrication-off-clearcase"
+		;;
+
+		2-fabrication-off-clearcase-sanscompil)
+			_sldAlpLas "2-fabrication-off-clearcase-sanscompil"
+		;;
+
+		3-preparation-valorisation)
+			_sldBlas "3-Preparation-Valorisation"
+		;;
+
+		4-valorisation)
+			_sldBlas "4-Valorisation-Sand"
+		;;
+
+		5-deploy)
+			_sldBlas "5-Deploy-Weblogic"
+		;;
+
+		6-junit)
+			_sldBlas "6-Junit"
+		;;
+
+        8-junit-debuggage)
+            _sldBlas "8-Junit-Debuggage"
+        ;;
+
+		1-2-3-4-5)
+			_sldBlas "1-2-3-4-5"
+		;;
+
+		2-3-4-5)
+			_sldBlas "2-3-4-5"
+		;;
+
+		3-4-5)
+			_sldBlas "3-4-5"
+		;;
+
+		j1j2)
+			_sldMakeJs "~/Bureau"
+		;;
+
+		env)
+			shift
+			_sldEnv $1
+		;;
+
+		cd)
+			shift
+			_sldCd $1
+		;;
+
+		up)
+			_sldUp
+		;;
+
+		clean)
+			_sldClean
+		;;
+
+		wls)
+			_sldWls
+		;;
+
+		help)
+			_sldHelp
+		;;
+
+		*)
+			echo "SLD : Commande [$1] inconnue"
+			exit 1
+	esac
+	shift
+done

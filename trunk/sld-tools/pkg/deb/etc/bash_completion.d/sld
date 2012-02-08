@@ -1,0 +1,12 @@
+have sld &&
+_sldCompletion() {
+	local cur goals
+	COMPREPLY=()
+	cur=${COMP_WORDS[COMP_CWORD]}
+	goals="1-compilation-tiga 2-fabrication-composants 2-fabrication-off-clearcase 3-preparation-valorisation 4-valorisation 5-deploy 6-junit 8-junit-debuggage"
+	goals="$goals 1-2-3-4-5 2-3-4-5 3-4-5 j1j2 env cd up clean wls help"
+	cur=`echo $cur | sed 's/\\\\//g'`
+	COMPREPLY=($(compgen -W "${goals}" ${cur} | sed 's/\\\\//g') )
+}
+
+have sld && complete -F _sldCompletion -o filenames sld

@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# On donne les droits d'execution à sld
+chmod 755 /usr/bin/sld
+
+# On donne les droits d'execution à j1.pl
+chmod 755 /usr/bin/j1.pl
+
+# On donne les droits d'execution au fichier de completion
+chmod 755 /etc/bash_completion.d/sld
