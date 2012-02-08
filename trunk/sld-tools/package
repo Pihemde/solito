@@ -1,16 +1,6 @@
 #!/bin/bash
 
-function _PackageName() {
-        grep -i "package:" "$1" | cut -c 10-
-}
-
-function _PackageVersion() {
-        grep -i "version:" "$1" | cut -c 10-
-}
-
-function _PackageArchitecture() {
-        grep -i "architecture:" "$1" | cut -c 15-
-}
+source ../debmake/debmake
 
 SRC_DIR="./src"
 PKG_DIR="./pkg/deb"
@@ -19,17 +9,11 @@ TMP_DIR="/tmp"
 
 CONTROLE_FILE="$PKG_DIR/DEBIAN/control"
 
-WKG_DIR="$TMP_DIR/`_PackageName $CONTROLE_FILE`_`_PackageVersion $CONTROLE_FILE`_`_PackageArchitecture $CONTROLE_FILE`"
+WKG_DIR=`_PrepareWorkingDirectory "$TMP_DIR" "$CONTROLE_FILE"`
 
-rm -r -f "$WKG_DIR"
-mkdir -p "$WKG_DIR"
+_CopyContentIgnoreHidden "$PKG_DIR" "$WKG_DIR"
 
-cp -Rf "$PKG_DIR"/* "$WKG_DIR"
+_CopyCreateDir "$SRC_DIR/sld" "$WKG_DIR/usr/bin"
+_CopyCreateDir "$SRC_DIR/j1.pl" "$WKG_DIR/usr/bin"
 
-mkdir -p "$WKG_DIR/usr/bin"
-cp "$SRC_DIR/sld" "$WKG_DIR/usr/bin"
-cp "$SRC_DIR/j1.pl" "$WKG_DIR/usr/bin"
-
-dpkg-deb --build "$WKG_DIR" "$DST_DIR"
-
-rm -r -f "$WKG_DIR"
+_MakeDeb "$WKG_DIR" "$DST_DIR"
