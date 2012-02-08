@@ -4,5 +4,6 @@ Section: base
 Priority: optional
 Architecture: all
 Depends: bash
+Replaces: sld
 Maintainer: Pierre-Marie Dhaussy <pierre-marie.dhaussy@bull.net>
 Description: Ensemble de fonctions d'assistance au développement du framework Java de Pôle-Emploi (SLD).
