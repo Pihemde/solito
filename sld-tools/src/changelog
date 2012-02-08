@@ -1,0 +1,31 @@
+sld 0.3
+	Le script deviens un executable
+	Export de la configuration en fichier de conf (2 possibilités : /etc/sld.conf ou ~/.sld)
+	Rennomage de BUILD_J1 en SLD_J1
+	
+	-- Pierre-Marie Dhaussy <pierre-marie.dhaussy@bull.net> 13/01/2012
+	
+sld 0.2.1
+	Modification de la fonction _sldUp pour prendre en charge la version 5 du SLD
+	
+	-- Pierre-Marie Dhaussy <pierre-marie.dhaussy@bull.net> 05/12/2011
+		
+sld 0.2
+	Ajout d'une fonction interprétant des 'goals'
+		- L'ensemble des fonctionnalités des alias de la version précédentes sont couvert
+		- Il est possible d'enchainer des goals (les commandes correspondantes s'executeront
+			séquentiellement dans l'ordre de saisie
+		- La complétion sur cette commande est supportée
+	Ajout de la fonction '_sldCd' qui effectue un 'cd' vers les répertoires courant du framework
+	le choix se fait à l'aide de mots clés
+	Ajout de la fonction '_sldClean' qui supprime le répertoire où sont stockés les composants
+	Suppression de tous les alias à l'exception de 'sld-ant'
+	Toutes les fonctions ont été préfixées avec un undercore afin de les rendre 'invisible'
+
+	-- Pierre-Marie Dhaussy <pierre-marie.dhaussy@bull.net> 12/11/2011
+
+sld 0.1.9
+	Ajout de la fonction 'sldUp' qui mets à jour les sources à partir du repository SVN
+	Ajout de la fonction 'sldWls' qui démarre l'instance du serveur Weblogic
+	
+	-- Pierre-Marie Dhaussy <pierre-marie.dhaussy@bull.net> 10/11/2011

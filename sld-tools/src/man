@@ -1,0 +1,91 @@
+.\"Created with GNOME Manpages Editor
+.\"http://sourceforge.net/projects/gmanedit2
+
+.\"Replace <program> with the program name, x with the Section Number
+.TH SLD 8 "13 Janvier 2012" "" "Linux User's Manual"
+
+.SH NOM
+sld \- Assistant de développement du framework Pôle-Emploi : SLD
+
+..SH RÉSUMÉ
+\fBsld\fP
+.RI GOALS
+.br
+
+.SH DESCRIPTION
+.PP
+\fBsld\fP
+est un programme permettant d'effectuer simplement des tâches complexes relatives au développement du framework SLD.
+
+.SH GOALS
+.IP \fB\ 1-compilation-tiga\fP
+Lance la compilation TIGA
+
+.IP \fB\ 2-fabrication-composants\fP
+Fabrique les composants au moyen de SAND
+
+.IP \fB\ 2-fabrication-off-clearcase\fP
+Fabrique les composants au moyen de SAND
+
+.IP \fB\ 3-preparation-valorisation\fP
+Prépare la valorisation des composants
+
+.IP \fB\ 4-valorisation\fP
+Valorise les composants
+
+.IP \fB\ 5-deploy\fP
+Déploie sur le serveur Weblogic les composants
+
+.IP \fB\ 6-junit\fP
+Lance les tests JUnit (AllTestsBatch)
+
+.IP \fB\ 8-junit-debuggage\fP
+Lance les tests JUnit (AllTestsBatch)
+
+.IP \fB\ 1-2-3-4-5\fP
+Effectue séquentiellement les tâches 1, 2, 3, 4 et 5
+
+.IP \fB\ 2-3-4-5\fP
+Effectue séquentiellement les tâches 2, 3, 4 et 5
+
+.IP \fB\ 3-4-5\fP
+Effectue séquentiellement les tâches 3, 4 et 5
+
+.IP \fB\ j1j2\fP
+Extrait les sources et fabrique la Javadoc
+
+.IP \fB\ env <environnement>\fP
+Sélectionne l'environnement spécifié
+
+.IP \fB\ cd <repertoire>\fP
+Place l'utilisateur dans un des répertoires connu :
+.RS 0
+	\fI\ src, source, sources, home\fP : Racine des working copie.
+.RS 0
+	\fI\ db, DB, batch, Batch\fP : Racine de la working copie du batch
+.RS 0
+	\fI\ dg, DG, tp, Tp, TP\fP : Racine de la working copie du TP
+.RS 0
+	\fI\ pubs, composants\fP : Répertoire des composants
+.RS 0
+	\fI\ html, junit, report\fP : Répertoire du rapport ATB
+.RS 0
+	\fI\ wls, weblogic\fP  : Répertoire du domaine Weblogic
+
+.IP \fB\ up\fP
+Mets à jour les copies de travail
+
+.IP \fB\ clean\fP
+Supprime les composants
+
+.IP \fB\ wls\fP
+Lance le serveur Weblogic
+
+.IP \fB\ help\fP
+Affiche l'aide
+
+.SH NOTES
+
+Nécessite : bash, perl, j1.pl
+
+.SH "SEE ALSO"
