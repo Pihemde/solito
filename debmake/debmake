@@ -1,0 +1,102 @@
+#!/bin/bash
+
+#
+# FUNCTIONS
+#
+
+function _PackageName() {
+	grep -i "package:" "$1" | cut -c 10-
+}
+
+function _PackageVersion() {
+	grep -i "version:" "$1" | cut -c 10-
+}
+
+function _PackageArchitecture() {
+        grep -i "architecture:" "$1" | cut -c 15-
+}
+
+function _CopyFiles() {
+	mkdir -p "$1"
+	for file in $3; do
+		cp -f "$2/$file" "$1"
+	done
+}
+
+function _ChmodFiles() {
+        for file in $1; do
+                chmod -f $2 "$file"
+        done
+}
+
+#
+# DEFAULT VARS
+#
+
+CONFIGURATION_FILE="./make-deb.conf"
+SRC_DIR="./src"
+PKG_DIR="./pkg"
+TMP_DIR="/tmp"
+DST_DIR="."
+
+SCRIPTS_FILES="$SRC_DIR/preinst postinst prerm postrm"
+DEBIAN_FILES="control $SCRIPTS_FILES"
+USR_BIN_FILES=""
+USR_LIB_FILES=""
+USR_SHARE_FILES=""
+USR_SHARE_DOC_FILES=""
+
+#
+# LOADING CONFIGURATION FILE
+#
+
+# TODO : prévoir une directive pour forcer un autre fichier de conf
+source "$CONFIGURATION_FILE"
+
+# TODO : prévoir un control du fichier de conf
+
+#
+#
+#
+
+PKG_NAME=`_PackageName $CONTROL_FILE`
+PKG_VERSION=`_PackageVersion $CONTROL_FILE`
+PKG_ARCHITECTURE=`_PackageArchitecture $CONTROL_FILE`
+WKG_DIR="$TMP_DIR/$PKG_NAME-$PKG_VERSION-$PKG_ARCHITECTURE"
+
+# delete existing working directory
+rm -Rf "$WKG_DIR"
+
+# create working directory
+mkdir -p "$WKG_DIR"
+
+# copy structure
+cp -Rf "$PKG_DIR" "$WKG_DIR"
+
+# copy DEBIAN files
+_CopyFiles "$WKG_DIR/DEBIAN" "$CONTROL_FILE $PREINST_FILE $POSTINST_FILE $PRERM_FILE $POSTRM_FILE"
+
+# chmod DEBIAN scripts
+_ChmodFiles "$PREINST_FILE $POSTINST_FILE $PRERM_FILE $POSTRM_FILE" "755"
+
+# copy usr/bin files
+if [ -n "$USR_BIN_FILES" ]; then
+	_CopyFiles "$WKG_DIR/usr/bin" "$USR_BIN_FILES"
+fi
+
+# copy usr/lib/<package name> files
+if [ -n "$USR_LIB_FILES" ]; then
+	_CopyFiles "$WKG_DIR/usr/lib/$PKG_NAME" "$USR_LIB_FILES"
+fi
+
+# copy usr/share/<package name> files
+if [ -n "$USR_SHARE_FILES" ]; then
+	_CopyFiles "$WKG_DIR/usr/share/$PKG_NAME" "$USR_SHARE_FILES"
+fi
+
+# copy usr/share/doc/<package name> files
+if [ -n "$USR_SHARE_DOC_FILES" ]; then
+	_CopyFiles "$WKG_DIR/usr/share/doc/$PKG_NAME" "$USR_SHARE_DOC_FILES"
+fi
+
+dpkg-deb --build "$WKG_DIR" "$DST_DIR"

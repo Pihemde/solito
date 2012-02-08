@@ -1,0 +1,8 @@
+Package: dpm
+Version: 0.1
+Section: base
+Priority: optional
+Architecture: all
+Depends: bash
+Maintainer: Pierre-Marie Dhaussy <pierremarie.dhaussy@gmail.com>
+Description: Assistant de _DéPloieMent_ d'applications sur serveur J2EE

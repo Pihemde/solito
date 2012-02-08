@@ -1,0 +1,20 @@
+#!/bin/bash
+
+WORKDIR="./";
+
+if [ "$#" -eq "0" ]; then
+	echo "Usage : unsvn [path]"
+	echo "path : working copy start point"
+	exit 0
+else
+	WORKDIR=$1
+fi
+
+SVN_FILES=".svn"
+
+find ${WORKDIR} -depth -name ${SVN_FILES}
+
+CMD="find ${WORKDIR} -depth -name ${SVN_FILES} -exec rm -Rf {} ;"
+echo $CMD
+$CMD
+
