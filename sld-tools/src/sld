@@ -4,7 +4,7 @@
 #
 #				Assistant de développement du framework Pôle-Emploi : SLD
 #
-#	Version : 0.3
+#	Version : 0.3.6
 #	Date : 13/01/2012
 #	Auteur : Pierre-Marie Dhaussy <pierre-marie.dhaussy@bull.net>
 #
@@ -79,11 +79,13 @@ function _sldLoadConfiguration() {
 # - 2 : avoir des options qui pointent vers les sources du SLD
 #
 function _sldAnt() {
-	# On sauvegarde le ANT_HOME
-	ANT_HOME_BAK=${ANT_HOME}
+	# On sauvegarde le ANT_HOME et le CLASSPATH
+	ANT_HOME_BAK="${ANT_HOME}"
+	CLASSPATH_BAK="${CLASSPATH}"
 
-	# On positionne le ANT_HOME pour qu'il pointe vers celui spécifique PE
+	# On positionne le ANT_HOME pour qu'il pointe vers celui spécifique PE et le CLASSPATH spécifique
 	export ANT_HOME=${SLD_ANT_HOME}
+	export CLASSPATH="${SLD_ANT_CLASSPATH}:${CLASSPATH}"
 
 	# On se positionne dans le répertoire hebergeant le script ANT
 	cd $1
@@ -94,8 +96,9 @@ function _sldAnt() {
 	# On se repositionne dans le répertoire d'origine si possible et silencieusement
 	cd - > /dev/null
 
-	# On remet le ANT_HOME propre
-	export ANT_HOME=${ANT_HOME_BAK}
+	# On remet le ANT_HOME et le CLASSPATH propre
+	export ANT_HOME="${ANT_HOME_BAK}"
+	export CLASSPATH="${CLASSPATH_BAK}"
 }
 
 #
@@ -219,40 +222,32 @@ function _sldUp() {
 	echo "All done"
 }
 
-#
-# Permet de se déplacer facilement dans les répertoires du projet
-#
-function _sldCd() {
-	case "$1" in
-		src | source | sources | home)
-			cd ${SLD_HOME}
-		;;
+function _sldClasspath() {
+	CP=""
 
-		db | DB | batch | Batch)
-			cd ${SLD_DB_HOME}
-		;;
+	# Libs in DB
+	if [ -n "${SLD_ANT_DB_LIBS}" ]; then
+		for P in ${SLD_ANT_DB_LIBS}; do
+			CP="$CP:${SLD_DB_HOME}/$P"
+		done
+	fi
 
-		dg | DG | tp | Tp | TP)
-			cd ${SLD_DG_HOME}
-		;;
+	# Libs in DG
+	if [ -n "${SLD_ANT_DG_LIBS}" ]; then
+	        for P in ${SLD_ANT_DG_LIBS}; do
+        	        CP="$CP:${SLD_DG_HOME}/$P"
+	        done
+	fi
 
-		pubs|composants)
-			cd ${SLD_PUBS}
-		;;
+	# Other Libs
+	if [ -n "${SLD_ANT_LIBS}" ]; then
+		for P in ${SLD_ANT_LIBS}; do
+        	        CP="$CP:$P"
+	        done
+	fi
 
-		html|junit|report)
-			cd ${SLD_HTML}
-		;;
-
-		wls|weblogic)
-			cd ${SLD_WLS_HOME}
-		;;
-
-		*)
-			echo "Ce mot clé ne correspond à aucun répertoire."
-			echo "Mots clé connu : src, source, sources, home ; db, DB, batch, Batch ; dg, DG, tp, Tp, TP ; pubs, composants ; html, junit, report ; wls, weblogic"
-		break
-	esac
+	# On renvoie le résultat en supprimant le 1er caractère ':'
+	echo "${CP:1}"
 }
 
 function _sldEnv() {
@@ -306,7 +301,6 @@ function _sldEnv() {
 			exit 1
 	esac
 
-	#export ANT_HOME=${SLD_ANT_HOME}
 	export SLD_DB_OPTS="-Dsldj.db.home=${SLD_DB_HOME}"
 	export SLD_DG_OPTS="-Dsldj.dg.home=${SLD_DG_HOME}"
 	export SLD_OPTS="${SLD_DB_OPTS} ${SLD_DG_OPTS}"
@@ -314,6 +308,9 @@ function _sldEnv() {
 	export SLD_HTML="${SLD_DB_HOME}/LDJava_Src/LDJ_Connecteurs_B/QualifBatchUtilisateurJUnitTest.out"
 
 	export SLD_WLS_HOME="${WLS_HOME}/batch4-wls10.3/"
+
+	# ANT CLASSPATH
+	export SLD_ANT_CLASSPATH="`_sldClasspath`"
 }
 
 function _sldHelp() {
@@ -363,9 +360,9 @@ while (( "$#" )) ; do
 			_sldBlas "6-Junit"
 		;;
 
-        8-junit-debuggage)
-            _sldBlas "8-Junit-Debuggage"
-        ;;
+		8-junit-debuggage)
+			_sldBlas "8-Junit-Debuggage"
+	        ;;
 
 		1-2-3-4-5)
 			_sldBlas "1-2-3-4-5"
@@ -375,22 +372,23 @@ while (( "$#" )) ; do
 			_sldBlas "2-3-4-5"
 		;;
 
+		2+3-4-5)
+			_sldBlas "2+3-4-5"
+		;;
+
 		3-4-5)
 			_sldBlas "3-4-5"
 		;;
 
 		j1j2)
-			_sldMakeJs "~/Bureau"
+			_sldMakeJs "${SLD_JS_DEST}"
 		;;
 
 		env)
+			# TODO attention ça ne marche plus
 			shift
 			_sldEnv $1
-		;;
-
-		cd)
-			shift
-			_sldCd $1
+			# il faudrait sauvegarder la version d'env dans un fichier d'exec
 		;;
 
 		up)
